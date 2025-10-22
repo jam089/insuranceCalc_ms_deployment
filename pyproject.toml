@@ -1,21 +1,14 @@
-[project]
+[tool.poetry]
 name = "insurancecalc-ms-deployment"
 version = "0.1.0"
 description = ""
-authors = [
-    {name = "Ivan Filippov",email = "jam089@mail.ru"}
-]
+authors = ["jam089 <jam089@mail.ru>"]
 readme = "README.md"
 package-mode = false
 
 
 [tool.poetry.dependencies]
 python = "^3.12"
-
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.group.dev.dependencies]
 testcontainers = ">=4.13.2,<5.0.0"
@@ -25,6 +18,10 @@ ruff = ">=0.14.1,<0.15.0"
 httpx = ">=0.28.1,<0.29.0"
 pytest-asyncio = ">=1.2.0,<2.0.0"
 black = ">=25.9.0,<26.0.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
 
 [tool.pytest.ini_options]
 pythonpath = [
