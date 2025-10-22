@@ -1,0 +1,92 @@
+name: e2e tests
+on:
+  push:
+    branches: ["main"]
+    paths-ignore:
+      - tests/
+      - .github/
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    container: python:3.12.10
+    if: github.event_name != 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install deps
+        run: |
+          pip install poetry
+          poetry install --with dev
+
+      - name: Black checking
+        run: poetry run black --check .
+
+      - name: Ruff checking
+        run: poetry run ruff check . --output-format=github
+
+      - name: MyPy checking
+        run: poetry run mypy . --junit-xml=mypy-report.xml
+
+      - name: Upload test report
+        uses: mikepenz/action-junit-report@v5
+        with:
+          report_paths: mypy-report.xml
+          require_tests: true
+
+  integration:
+    runs-on: ubuntu-latest
+    env:
+      INSURANCE__DB__URL: ${{ secrets.INSURANCE__DB__URL }}
+      INSURANCE__DB__LOGIN: ${{ secrets.INSURANCE__DB__LOGIN }}
+      INSURANCE__DB__PASS: ${{ secrets.INSURANCE__DB__PASS }}
+      INSURANCE__DB__DB_SCHEMA: ${{ secrets.INSURANCE__DB__DB_SCHEMA }}
+      INSURANCE__DB__ECHO: 0
+      INSURANCE__DB__ECHO_POOL: 0
+      INSURANCE__KAFKA_LOGGER__BOOTSTRAP_SERVERS: ${{ secrets.INSURANCE__KAFKA_LOGGER__BOOTSTRAP_SERVERS }}
+      INSURANCE__KAFKA_LOGGER__TOPIC: ${{ secrets.INSURANCE__KAFKA_LOGGER__TOPIC }}
+      INSURANCE__KAFKA_LOGGER__ENABLE: true
+
+      CONSUMER__DB__URL: ${{ secrets.CONSUMER__DB__URL }}
+      CONSUMER__DB__ECHO: 0
+      CONSUMER__DB__ECHO_POOL: 0
+      CONSUMER__DB__LOGIN: ${{ secrets.CONSUMER__DB__LOGIN }}
+      CONSUMER__DB__PASS: ${{ secrets.CONSUMER__DB__PASS }}
+      CONSUMER__DB__SCHEMA: ${{ secrets.CONSUMER__DB__SCHEMA }}
+      CONSUMER__KAFKA__BOOTSTRAP_SERVERS: ${{ secrets.CONSUMER__KAFKA__BOOTSTRAP_SERVERS }}
+      CONSUMER__KAFKA__TOPICS: ${{ secrets.CONSUMER__KAFKA__TOPICS }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12.10'
+      - name: Install poetry and deps
+        run: |
+          pip install "poetry==2.1.2"
+          poetry install --with dev
+      - name: Run integration tests
+        run: poetry run pytest -v --junitxml=pytest-results.xml
+      - name: Mark repo as safe
+        run: git config --global --add safe.directory $GITHUB_WORKSPACE
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-results
+          path: ${{ github.workspace }}/pytest-results-integration.xml
+      - name: Publish Test Report
+        uses: dorny/test-reporter@v2.1.1
+        if: always()
+        with:
+          name: Pytest Results
+          path: pytest-results.xml
+          reporter: java-junit
