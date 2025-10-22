@@ -1,0 +1,180 @@
+services:
+
+  insurance_calc_ms:
+    image: jam089/insurance_calc_ms:latest
+    pull_policy: always
+    container_name: insurance_calc_ms
+    environment:
+      INSURANCE__DB__URL: ${INSURANCE__DB__URL}
+      INSURANCE__DB__ECHO: ${INSURANCE__DB__ECHO}
+      INSURANCE__DB__ECHO_POOL: ${INSURANCE__DB__ECHO_POOL}
+      INSURANCE__KAFKA_LOGGER__BOOTSTRAP_SERVERS: ${INSURANCE__KAFKA_LOGGER__BOOTSTRAP_SERVERS}
+      INSURANCE__KAFKA_LOGGER__TOPIC: ${INSURANCE__KAFKA_LOGGER__TOPIC}
+      INSURANCE__KAFKA_LOGGER__ENABLE: ${INSURANCE__KAFKA_LOGGER__ENABLE}
+    ports:
+      - "8000:8000"
+    depends_on:
+      pg_calc:
+        condition: service_healthy
+      kafka-controller:
+        condition: service_started
+      kafka-broker:
+        condition: service_started
+    volumes:
+      - ./data:/app/imports:ro
+    networks:
+      - pg-calc
+      - kafka-network
+      - frontend
+
+  logger_ms:
+    image: jam089/insurance_calc_ms.logger_consumer_ms:latest
+    pull_policy: always
+    container_name: logger_ms
+    environment:
+      CONSUMER__DB__URL: ${CONSUMER__DB__URL}
+      CONSUMER__DB__ECHO: ${CONSUMER__DB__ECHO}
+      CONSUMER__DB__ECHO_POOL: ${CONSUMER__DB__ECHO_POOL}
+      CONSUMER__KAFKA__BOOTSTRAP_SERVERS: ${CONSUMER__KAFKA__BOOTSTRAP_SERVERS}
+      CONSUMER__KAFKA__TOPICS: ${CONSUMER__KAFKA__TOPICS}
+    ports:
+      - "8050:8050"
+    depends_on:
+      insurance_calc_ms:
+        condition: service_started
+      pg_logger:
+        condition: service_healthy
+      kafka-controller:
+        condition: service_started
+      kafka-broker:
+        condition: service_started
+    networks:
+      - pg-logger
+      - kafka-network
+      - frontend
+
+  frontend:
+    image: jam089/insurance_calc_frontend:latest
+    pull_policy: always
+    ports:
+      - "80:80"
+    environment:
+      INSURANCE_URL: insurance_calc_ms:8000
+      LOGS_URL: logger_ms:8050
+    depends_on:
+      - insurance_calc_ms
+      - logger_ms
+    networks:
+      frontend:
+
+  pg_calc:
+    image: postgres
+    environment:
+      POSTGRES_DB: ${INSURANCE__DB__DB_SCHEMA}
+      POSTGRES_USER: ${INSURANCE__DB__LOGIN}
+      POSTGRES_PASSWORD: ${INSURANCE__DB__PASS}
+    ports:
+      - "5452:5432"
+    networks:
+      - pg-calc
+    healthcheck:
+      test: [
+        "CMD-SHELL",
+        "pg_isready -U $INSURANCE__DB__LOGIN -d $INSURANCE__DB__DB_SCHEMA -h localhost"
+      ]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+
+  pg_logger:
+    image: postgres
+    environment:
+      POSTGRES_DB: ${CONSUMER__DB__SCHEMA}
+      POSTGRES_USER: ${CONSUMER__DB__LOGIN}
+      POSTGRES_PASSWORD: ${CONSUMER__DB__PASS}
+    ports:
+      - "5432:5432"
+    networks:
+      - pg-logger
+    healthcheck:
+      test: [
+        "CMD-SHELL",
+        "pg_isready -U $CONSUMER__DB__LOGIN -d $CONSUMER__DB__SCHEMA -h localhost"
+      ]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+
+  adminer:
+    image: adminer
+    ports:
+      - "8080:8080"
+      - "8085:8080"
+    profiles:
+      - op_ui
+    networks:
+      - pg-calc
+      - pg-logger
+
+  kafka-controller:
+    image: apache/kafka:latest
+    hostname: kafka-controller
+    container_name: kafka-controller
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: 'controller'
+      KAFKA_LISTENERS: 'CONTROLLER://kafka-controller:29093'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka-controller:29093
+    networks:
+      - kafka-network
+
+  kafka-broker:
+    image: apache/kafka:latest
+    hostname: kafka-broker
+    container_name: kafka-broker
+    environment:
+      KAFKA_NODE_ID: 2
+      KAFKA_PROCESS_ROLES: 'broker'
+      KAFKA_LISTENERS: 'PLAINTEXT://kafka-broker:29092,PLAINTEXT_HOST://0.0.0.0:9092'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka-broker:29092,PLAINTEXT_HOST://localhost:9092'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka-controller:29093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_NUM_PARTITIONS: 3
+    ports:
+      - "9092:9092"
+    depends_on:
+      - kafka-controller
+    networks:
+      - kafka-network
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    depends_on:
+      - kafka-broker
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka-broker:29092
+    ports:
+      - "9080:8080"
+    networks:
+      - kafka-network
+    profiles:
+      - op_ui
+
+networks:
+  kafka-network:
+    driver: bridge
+  pg-calc:
+    driver: bridge
+  pg-logger:
+    driver: bridge
+  frontend:
+    driver: bridge
