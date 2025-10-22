@@ -42,7 +42,7 @@ jobs:
           report_paths: mypy-report.xml
           require_tests: true
 
-  integration:
+  e2e:
     runs-on: ubuntu-latest
     env:
       INSURANCE__DB__URL: ${{ secrets.INSURANCE__DB__URL }}
@@ -74,7 +74,7 @@ jobs:
         run: |
           pip install "poetry==2.1.2"
           poetry install --with dev
-      - name: Run integration tests
+      - name: Run e2e tests
         run: poetry run pytest -v --junitxml=pytest-results.xml
       - name: Mark repo as safe
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
