@@ -16,16 +16,14 @@ python = "^3.12"
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
-[dependency-groups]
-dev = [
-    "testcontainers (>=4.13.2,<5.0.0)",
-    "pytest (>=8.4.2,<9.0.0)",
-    "mypy (>=1.18.2,<2.0.0)",
-    "ruff (>=0.14.1,<0.15.0)",
-    "httpx (>=0.28.1,<0.29.0)",
-    "pytest-asyncio (>=1.2.0,<2.0.0)",
-    "black (>=25.9.0,<26.0.0)"
-]
+[tool.poetry.group.dev.dependencies]
+testcontainers = ">=4.13.2,<5.0.0"
+pytest = ">=8.4.2,<9.0.0"
+mypy = ">=1.18.2,<2.0.0"
+ruff = ">=0.14.1,<0.15.0"
+httpx = ">=0.28.1,<0.29.0"
+pytest-asyncio = ">=1.2.0,<2.0.0"
+black = ">=25.9.0,<26.0.0"
 
 [tool.pytest.ini_options]
 pythonpath = [
